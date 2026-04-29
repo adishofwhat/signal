@@ -1,0 +1,5 @@
+{
+  "key": "8ad27ff0f1b862288e415bfe74f4ea3d",
+  "system_prompt_preview": "You are a senior media strategist explaining a scenario analysis to a marketing director. Write 3-4 sentences of clear, direct prose. Reference the exact numbers provided. Identify which lever delivers the most value and why. No bullet points. No jargon.",
+  "response": "{\n  \"strategic_summary\": \"Our scenario analysis reveals three distinct opportunities for optimization. Shifting $88,001 from YouTube to CTV could net an additional $45,270 in revenue and 377.3 conversions, while capping programmatic display at 6 could yield an estimated $149,250 in savings. However, rotating creative on social_v1 at day 44 clearly delivers the most direct value, projected to generate an additional $166,897 in revenue and 1390.8 extra conversions by boosting campaign average CTR from 2.06% to 2.71%.\"\n}"
+}

@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env
+
+# Environment / secrets
+.env.*
+*.env
+.streamlit/secrets.toml
+
+# LLM response cache (populated locally — commit only the directory skeleton)
+cache/llm_responses/*.json
+
+# Generated data (regenerate with data/generator.py)
+data/*.csv
+data/charts/*.html
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# IDE / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+Thumbs.db
+
+# Logs
+*.log
