@@ -1,57 +1,32 @@
 # SIGNAL
 
-Automates the kind of multi-channel media audit that MOA does manually. Ingests campaign data, runs statistical diagnostics, flags inefficiencies, estimates dollar impact, and uses an LLM to write the strategic narrative.
+Prototype that automates multi-channel media audits. Runs five statistical diagnostics against campaign data, flags inefficiencies with dollar estimates, and uses an LLM to write the report. Inspired by MOA.
 
-Built on a fictional 90-day, $1.8M campaign (Meridian Outdoor Co.) across paid search, paid social, programmatic display, CTV, and YouTube. Data is synthetic with planted failure modes. Methods are real.
+Synthetic data on a fictional client (Meridian Outdoor Co., 90 days, $1.8M, five channels). The failure modes are planted. The methods are standard.
 
-## Architecture decision
+## How it works
 
-The LLM narrates. It doesn't compute. Every flag is a predetermined threshold (half-life < 30d, CPA uplift > 20%, correlation > 0.5 at p < 0.05). The LLM receives evidence that's already been computed and writes a report grounded in those numbers. Swap the model and the findings don't change.
+Hard separation between the stats and the LLM. Python does all the detection — exponential decay fitting for creative fatigue, piecewise regression for frequency saturation, Pearson + Granger for cross-channel cannibalization, Kruskal-Wallis for daypart CVR differences, rolling marginal CPA for budget efficiency. Each module has its own thresholds. The LLM gets the results after everything's already been flagged and writes a narrative around the numbers. You could swap the model and nothing changes about what gets detected.
 
-## Diagnostics
+I spent the most time on creative fatigue and cannibalization. Fatigue needed onset detection because social_v1 was flat for 25 days before it started decaying — fitting the full series produced garbage. Cannibalization is the weakest of the five and I know it. Pearson correlation with Granger at lag 1 is a signal, not proof. CausalImpact would be the right tool but felt like overkill for a prototype on synthetic data where I already know the answer.
 
-**Creative fatigue** — Exponential decay fit on CTR over time. Onset detection first (social_v1 was flat for 25 days before decaying), then fit only the decaying portion. Half-life 14.5d, 53% CTR collapse. Estimates $130K lost over 30 days if not rotated.
+The what-if simulator lets you adjust budget allocation, frequency caps, and creative rotation timing. Projections are computed from the fitted models and update as you move sliders. The LLM just explains the scenario on a button click.
 
-**Frequency saturation** — Piecewise linear regression on CPA vs frequency, breakpoint found via grid search. Breakpoint at 7.1, current avg 9.7. CPA 41% higher above the break. Recommendation: cap at 7 in the DSP.
+## What this doesn't handle
 
-**Cannibalization** — Pearson correlation between weekly search spend changes and display CPA changes (r=0.65, p=0.02). Granger causality not significant at lag 1, so this is correlational, not causal. In production this would be CausalImpact, not Pearson. The app says that.
-
-**Daypart opportunity** — Kruskal-Wallis on CVR across dayparts, Dunn's post-hoc with Bonferroni correction. Prime and late night have 1.38× average CVR but get 5-7% of impressions. Set bid multipliers.
-
-**Budget efficiency** — Rolling 14-day marginal CPA, first-30d vs last-30d comparison, Welch's t-test. YouTube ratio 2.65× ($57 → $151). CTV stable at 0.91×. Shift budget.
-
-## What-if simulator
-
-Three levers, each grounded in the fitted model from the corresponding diagnostic:
-
-- Budget reallocation — shift 0-40% of YouTube to CTV using late-30d CPAs
-- Frequency cap — piecewise model predicts CPA at new frequency
-- Creative rotation — counterfactual CTR series assuming replacement performs at initial level
-
-Numbers update as sliders move. LLM generates a narrative on button click but the math is already done.
-
-## What's not here
-
-The data is synthetic and the failure modes are planted. The interesting production problems this skips:
-
-- API data quality (Meta response gaps, Google Ads sampling, TTD reporting latency)
-- Attribution reconciliation across platforms claiming the same conversion
-- Confounders — competitor activity, promos, platform algorithm changes all look like the patterns these diagnostics detect
-- Platform learning phases when you shift budget (ceteris paribus doesn't hold)
-
-Production version would use CausalImpact for cannibalization, MMM integration for budget allocation, and a feedback loop tracking whether recommendations actually moved the numbers.
+The synthetic data dodges the hardest production problems — API data quality across platforms, attribution reconciliation, and confounders that look like the patterns these diagnostics detect (a competitor launching a sale looks a lot like creative fatigue in the data). The what-if projections assume ceteris paribus, which doesn't hold when platforms enter learning phases after budget changes.
 
 ## Stack
 
-Python · scipy · statsmodels · scikit-learn · Gemini API · Plotly · Streamlit
+Python · scipy · statsmodels · Gemini API · Plotly · Streamlit
 
 ## Setup
 
-```bash
+```
 pip install -r requirements.txt
 python3 data/generator.py
 LLM_PROVIDER=gemini LLM_API_KEY=your_key python3 run_intelligence.py
 streamlit run app.py
 ```
 
-Runs from cached LLM responses after the first `run_intelligence.py` call. No live key needed for the app.
+Runs from cached LLM responses after first `run_intelligence.py`. No live key needed for the app.
