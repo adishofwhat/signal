@@ -343,16 +343,28 @@ def _load_llm_cache() -> dict | None:
     response_text = raw.get("response", "")
     if not response_text:
         return None
-    # The response field is the raw LLM output (already JSON or wrapped in fences)
+
+    # Already a dict (e.g. cache was double-serialized on some Python versions)
+    if isinstance(response_text, dict):
+        return response_text
+
+    # Raw LLM output: JSON string, possibly wrapped in markdown fences
     try:
-        return json.loads(response_text)
-    except json.JSONDecodeError:
-        m = re.search(r"```(?:json)?\s*([\s\S]+?)\s*```", response_text)
-        if m:
-            try:
-                return json.loads(m.group(1).strip())
-            except Exception:
-                pass
+        parsed = json.loads(response_text)
+        # json.loads can return a string if the JSON is a quoted string
+        if isinstance(parsed, dict):
+            return parsed
+        if isinstance(parsed, str):
+            return json.loads(parsed)
+    except (json.JSONDecodeError, ValueError):
+        pass
+
+    m = re.search(r"```(?:json)?\s*([\s\S]+?)\s*```", response_text)
+    if m:
+        try:
+            return json.loads(m.group(1).strip())
+        except Exception:
+            pass
     return None
 
 
@@ -938,6 +950,11 @@ def main():
 
     # ── Load LLM cache ────────────────────────────────────────────────────────
     llm_output = _load_llm_cache()
+    if isinstance(llm_output, str):
+        try:
+            llm_output = json.loads(llm_output)
+        except (json.JSONDecodeError, ValueError):
+            llm_output = None
 
     # ── Summary metrics ───────────────────────────────────────────────────────
     total_spend       = float(campaigns["spend"].sum())
