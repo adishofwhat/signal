@@ -323,48 +323,79 @@ def _run_diagnostics():
     return results
 
 
+def _parse_stage1_candidate(text) -> dict | None:
+    """
+    Try every reasonable way to extract a Stage-1 dict from a value that may be
+    a dict, a JSON string, a double-encoded string, or markdown-fenced JSON.
+    Returns the dict only if it contains 'executive_summary', otherwise None.
+    """
+    def _is_stage1(d) -> bool:
+        return isinstance(d, dict) and "executive_summary" in d
+
+    # Already parsed
+    if _is_stage1(text):
+        return text
+
+    if not isinstance(text, str):
+        return None
+
+    # Strip markdown fences
+    fenced = re.search(r"```(?:json)?\s*([\s\S]+?)\s*```", text)
+    candidates = [text, fenced.group(1).strip() if fenced else None]
+
+    for candidate in candidates:
+        if not candidate:
+            continue
+        try:
+            parsed = json.loads(candidate)
+            if _is_stage1(parsed):
+                return parsed
+            # Double-encoded: the value is itself a JSON string
+            if isinstance(parsed, str):
+                inner = json.loads(parsed)
+                if _is_stage1(inner):
+                    return inner
+        except (json.JSONDecodeError, ValueError):
+            continue
+    return None
+
+
 def _load_llm_cache() -> dict | None:
     """
     Read the Stage-1 LLM output from the on-disk cache.
-    Returns the parsed JSON dict, or None if no cache exists.
+
+    Tries every JSON file in cache/llm_responses/, most-recently-modified first,
+    accepting the first one that parses into a dict containing 'executive_summary'.
+    This is resilient to cache key changes and format variations across environments.
     """
     cache_dir = ROOT / "cache" / "llm_responses"
     if not cache_dir.exists():
         return None
-    json_files = sorted(cache_dir.glob("*.json"))
+    json_files = sorted(
+        cache_dir.glob("*.json"),
+        key=lambda f: f.stat().st_mtime,
+        reverse=True,  # newest first
+    )
     if not json_files:
         return None
-    # Take the most recently modified file
-    latest = max(json_files, key=lambda f: f.stat().st_mtime)
-    try:
-        raw = json.loads(latest.read_text(encoding="utf-8"))
-    except Exception:
-        return None
-    response_text = raw.get("response", "")
-    if not response_text:
-        return None
 
-    # Already a dict (e.g. cache was double-serialized on some Python versions)
-    if isinstance(response_text, dict):
-        return response_text
-
-    # Raw LLM output: JSON string, possibly wrapped in markdown fences
-    try:
-        parsed = json.loads(response_text)
-        # json.loads can return a string if the JSON is a quoted string
-        if isinstance(parsed, dict):
-            return parsed
-        if isinstance(parsed, str):
-            return json.loads(parsed)
-    except (json.JSONDecodeError, ValueError):
-        pass
-
-    m = re.search(r"```(?:json)?\s*([\s\S]+?)\s*```", response_text)
-    if m:
+    for path in json_files:
         try:
-            return json.loads(m.group(1).strip())
+            raw = json.loads(path.read_text(encoding="utf-8"))
         except Exception:
-            pass
+            continue
+
+        # Each cache file is {"system_prompt": ..., "response": <llm_output>}
+        # But the file might also be the Stage-1 dict itself (direct commit artifact)
+        result = _parse_stage1_candidate(raw.get("response", ""))
+        if result:
+            return result
+
+        # Fallback: maybe the whole file is the Stage-1 dict
+        result = _parse_stage1_candidate(raw)
+        if result:
+            return result
+
     return None
 
 
